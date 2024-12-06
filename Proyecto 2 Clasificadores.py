@@ -4,74 +4,137 @@ Proyecto 2 - Clasificadores
 autor: Jiménez Malvaez Raúl Emilio
 """
 import pandas as pd
-from collections import Counter
-import math
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix
+import matplotlib.pyplot as plt
 
-def distancia_euclidiana(x1, x2):
-  """Calcula la distancia euclidiana entre dos puntos."""
-  distancia = 0
-  for i in range(len(x1)):
-    distancia += (x1[i] - x2[i]) ** 2
-  return math.sqrt(distancia)
 
-def knn(X_train, y_train, X_test, k):
-  """Implementa el algoritmo k-NN."""
-  y_pred = []
-  for punto_test in X_test:
-    distancias = [distancia_euclidiana(punto_test, punto_train) for punto_train in X_train]
-    k_vecinos_indices = sorted(range(len(distancias)), key=lambda i: distancias[i])[:k]
-    k_vecinos_etiquetas = [y_train[i] for i in k_vecinos_indices]
-    etiqueta_predicha = Counter(k_vecinos_etiquetas).most_common(1)[0][0]
-    y_pred.append(etiqueta_predicha)
-  return y_pred
+class Clasificadores:
+    """
+    Clase para entrenar, evaluar y comparar diferentes clasificadores 
+    utilizando la base de datos "cancer.xlsx".
+    """
 
-def accuracy_score(y_true, y_pred):
-  """Calcula la precisión."""
-  correctos = 0
-  for i in range(len(y_true)):
-    if y_true[i] == y_pred[i]:
-      correctos += 1
-  return correctos / len(y_true)
+    def __init__(self, data_path="cancer.xlsx"):
+        """
+        Inicializa la clase Clasificadores.
 
-def confusion_matrix(y_true, y_pred):
-  """Calcula la matriz de confusión."""
-  clases = set(y_true)
-  matriz = [[0 for _ in clases] for _ in clases]
-  for i in range(len(y_true)):
-    verdadera = y_true[i]
-    prediccion = y_pred[i]
-    matriz[verdadera][prediccion] += 1
-  return matriz
+        Args:
+          data_path (str): Ruta al archivo de datos (xlsx). Por defecto 
+                            es "cancer.xlsx".
+        """
+        try:
+            self.data = pd.read_excel(data_path, engine='openpyxl')
+            self.X = self.data.drop("diagnosis", axis=1)
+            self.y = self.data["diagnosis"].map({'B': 0, 'M': 1})
+            self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
+                self.X, self.y, test_size=0.2, random_state=42
+            )
+            self.clasificadores = {
+                "Regresión Logística": LogisticRegression(),
+                "k-NN": KNeighborsClassifier(),
+                "SVM": SVC(),
+                "Árbol de Decisión": DecisionTreeClassifier(),
+                "Random Forest": RandomForestClassifier(),
+            }
+        except FileNotFoundError:
+            print(f"Error: No se pudo encontrar el archivo '{data_path}'")
+            raise
+        except Exception as e:
+            print(f"Error al cargar o procesar los datos: {e}")
+            raise
 
-# Cargar los datos
-data = pd.read_excel("C:\Users\emili\Downloads\cancer.csv")
+    def entrenar_y_evaluar(self):
+        """
+        Entrena y evalúa los clasificadores.
 
-# Separar las características (X) y la variable objetivo (y)
-X = data.drop("diagnosis", axis=1)
-y = data["diagnosis"]
+        Returns:
+          dict: Diccionario con los resultados de cada clasificador, 
+                incluyendo precisión, matriz de confusión y 
+                puntuaciones de validación cruzada.
+        """
+        resultados = {}
+        for nombre, clasificador in self.clasificadores.items():
+            try:
+                # Entrenar
+                clasificador.fit(self.X_train, self.y_train)
+                # Predecir
+                y_pred = clasificador.predict(self.X_test)
+                # Evaluar
+                precision = accuracy_score(self.y_test, y_pred)
+                matriz_confusion = confusion_matrix(self.y_test, y_pred)
+                cv_scores = cross_val_score(clasificador, self.X, self.y, cv=5)
+                resultados[nombre] = {
+                    "Precisión": precision,
+                    "Matriz de Confusión": matriz_confusion,
+                    "Cross-validation scores": cv_scores,
+                }
+            except Exception as e:
+                print(f"Error al entrenar o evaluar {nombre}: {e}")
+                resultados[nombre] = {"Error": str(e)}
+        return resultados
 
-# Codificar la variable objetivo a valores numéricos (0 para 'B' y 1 para 'M')
-y = y.map({'B': 0, 'M': 1})
+    def comparar_arboles_decision(self):
+        """
+        Compara diferentes árboles de decisión con diferentes 
+        profundidades y selecciona el mejor basado en la precisión 
+        en el conjunto de prueba.
 
-# Dividir los datos en conjuntos de entrenamiento y prueba
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        Returns:
+          DecisionTreeClassifier: El mejor árbol de decisión encontrado.
+        """
+        profundidades = range(1, 11)
+        resultados_arboles = []
+        for profundidad in profundidades:
+            arbol = DecisionTreeClassifier(max_depth=profundidad, random_state=42)
+            arbol.fit(self.X_train, self.y_train)
+            y_pred = arbol.predict(self.X_test)
+            precision = accuracy_score(self.y_test, y_pred)
+            resultados_arboles.append(precision)
 
-# Convertir los datos a listas para facilitar el acceso a los elementos
-X_train = X_train.values.tolist()
-y_train = y_train.values.tolist()
-X_test = X_test.values.tolist()
-y_test = y_test.values.tolist()
+        # Gráfica de comparación
+        plt.figure(figsize=(10, 6))
+        plt.plot(profundidades, resultados_arboles, marker='o')
+        plt.xlabel("Profundidad del árbol")
+        plt.ylabel("Precisión")
+        plt.title("Comparación de árboles de decisión con diferentes profundidades")
+        plt.grid(True)
+        plt.show()
 
-# Predecir con k-NN (k=5 por ejemplo)
-y_pred = knn(X_train, y_train, X_test, k=5)
+        # Seleccionar el mejor árbol (ejemplo: con mayor precisión)
+        mejor_profundidad = profundidades[resultados_arboles.index(max(resultados_arboles))]
+        mejor_arbol = DecisionTreeClassifier(max_depth=mejor_profundidad, random_state=42)
+        mejor_arbol.fit(self.X_train, self.y_train)
 
-# Calcular la precisión
-precision = accuracy_score(y_test, y_pred)
+        print(f"Mejor profundidad del árbol: {mejor_profundidad}")
 
-# Calcular la matriz de confusión
-matriz_confusion = confusion_matrix(y_test, y_pred)
+        # Visualizar el mejor árbol
+        plt.figure(figsize=(12, 8))
+        plot_tree(mejor_arbol, feature_names=self.X.columns, class_names=["B", "M"], filled=True)
+        plt.title("Árbol de decisión óptimo")
+        plt.show()
 
-# Mostrar los resultados
-print(f"Clasificador: k-NN")
-print(f"Precisión: {precision}")
-print(f"Matriz de Confusión:\n{matriz_confusion}\n")
+        return mejor_arbol
+
+
+if __name__ == "__main__":
+    try:
+        clasificadores = Clasificadores("cancer.xlsx")
+        resultados = clasificadores.entrenar_y_evaluar()
+
+        # Imprimir los resultados de cada clasificador
+        for nombre, resultado in resultados.items():
+            print(f"\nClasificador: {nombre}")
+            for metrica, valor in resultado.items():
+                print(f"{metrica}: {valor}")
+
+        mejor_arbol = clasificadores.comparar_arboles_decision()
+        print(f"\nMejor árbol de decisión: {mejor_arbol}")
+
+    except Exception as e:
+        print(f"Error en el programa principal: {e}")
