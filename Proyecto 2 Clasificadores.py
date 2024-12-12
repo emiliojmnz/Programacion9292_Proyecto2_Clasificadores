@@ -3,38 +3,46 @@ Programación 9292
 Proyecto 2 - Clasificadores
 autor: Jiménez Malvaez Raúl Emilio
 """
-import pandas as pd
-from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.linear_model import LogisticRegression
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.svm import SVC
-from sklearn.tree import DecisionTreeClassifier, plot_tree
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, confusion_matrix
-import matplotlib.pyplot as plt
+#Comenzamos por importar todas las bibliotecas necesarias
+import pandas as pd #Para la manipulación de datos
+from sklearn.model_selection import train_test_split, cross_val_score #Para dividir los datos y realizar validación cruzada
+from sklearn.linear_model import LogisticRegression #Modelo de Regresión Logística
+from sklearn.neighbors import KNeighborsClassifier #Modelo de k-Nearest Neighbors
+from sklearn.svm import SVC #Modelo de Máquinas de Soporte Vectorial
+from sklearn.tree import DecisionTreeClassifier, plot_tree #Modelo de Árbol de Decisión y función para visualizarlo
+from sklearn.ensemble import RandomForestClassifier #Modelo de Random Forest
+from sklearn.metrics import accuracy_score, confusion_matrix #Métricas para evaluar el rendimiento
+import matplotlib.pyplot as plt #Para la visualización de datos a través de gráficas
 
 
 class Clasificadores:
     """
-    Clase para entrenar, evaluar y comparar diferentes clasificadores 
-    utilizando la base de datos "cancer.xlsx".
+    Clase para entrenar, evaluar y comparar diferentes clasificadores
+    utilizando la base de datos "cancer.csv".
     """
 
-    def __init__(self, data_path="cancer.xlsx"):
+    def __init__(self, data_path="cancer.csv"):
         """
-        Inicializa la clase Clasificadores.
+        Inicializamos la clase Clasificadores.
 
-        Args:
-          data_path (str): Ruta al archivo de datos (xlsx). Por defecto 
-                            es "cancer.xlsx".
+        Argumento:
+        data_path: Ruta al archivo de datos (csv).
+        Como el archivo del código y de la base de datos .csv se hallarán en la misma carpeta/repositorio, basta con "cancer.csv"
         """
         try:
-            self.data = pd.read_excel(data_path, engine='openpyxl')
-            self.X = self.data.drop("diagnosis", axis=1)
-            self.y = self.data["diagnosis"].map({'B': 0, 'M': 1})
+           #Cargamos los datos del archivo CSV usando pandas
+            self.data = pd.read_csv(data_path)
+
+           #Separamos las características (X) de la variable objetivo (y)
+            self.X = self.data.drop("diagnosis", axis=1) #Eliminamos la columna "diagnosis" del DataFrame para obtener las características
+            self.y = self.data["diagnosis"].map({'B': 0, 'M': 1}) #Mapeamos la columna "diagnosis": 'B' a 0 (benigno) y 'M' a 1 (maligno)
+
+           #Dividimos los datos en conjuntos de entrenamiento y prueba
             self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
-                self.X, self.y, test_size=0.2, random_state=42
+                self.X, self.y, test_size=0.2, random_state=42 #80% para entrenamiento, 20% para prueba, semilla aleatoria para reproducibilidad
             )
+
+           #Definimos los clasificadores a utilizar
             self.clasificadores = {
                 "Regresión Logística": LogisticRegression(),
                 "k-NN": KNeighborsClassifier(),
@@ -42,99 +50,109 @@ class Clasificadores:
                 "Árbol de Decisión": DecisionTreeClassifier(),
                 "Random Forest": RandomForestClassifier(),
             }
-        except FileNotFoundError:
+
+        except FileNotFoundError: #Manejamos la excepción si no se encuentra el archivo
             print(f"Error: No se pudo encontrar el archivo '{data_path}'")
-            raise
-        except Exception as e:
+            raise #Volvemos a lanzar la excepción para detener la ejecución
+        except Exception as e: #Manejamos cualquier otra excepción
             print(f"Error al cargar o procesar los datos: {e}")
-            raise
+            raise #Volvemos a lanzar la excepción para detener la ejecución
 
+   #Entrenamos y evaluamos los clasificadores.
     def entrenar_y_evaluar(self):
-        """
-        Entrena y evalúa los clasificadores.
-
-        Returns:
-          dict: Diccionario con los resultados de cada clasificador, 
-                incluyendo precisión, matriz de confusión y 
-                puntuaciones de validación cruzada.
-        """
-        resultados = {}
-        for nombre, clasificador in self.clasificadores.items():
+        resultados = {} #Creamos un diccionario vacío para almacenar los resultados
+        for nombre, clasificador in self.clasificadores.items(): #Iteramos sobre cada clasificador
             try:
-                # Entrenar
+               #Entrenamos el clasificador con los datos de entrenamiento
                 clasificador.fit(self.X_train, self.y_train)
-                # Predecir
+
+               #Realizamos predicciones con el clasificador usando los datos de prueba
                 y_pred = clasificador.predict(self.X_test)
-                # Evaluar
-                precision = accuracy_score(self.y_test, y_pred)
-                matriz_confusion = confusion_matrix(self.y_test, y_pred)
-                cv_scores = cross_val_score(clasificador, self.X, self.y, cv=5)
+
+               #Evaluamos el rendimiento del clasificador
+                precision = accuracy_score(self.y_test, y_pred) #Calculamos la precisión
+                matriz_confusion = confusion_matrix(self.y_test, y_pred) #Calculamos la matriz de confusión
+                cv_scores = cross_val_score(clasificador, self.X, self.y, cv=5) #Calculamos las puntuaciones de validación cruzada (5 folds)
+
+               #Guardamos los resultados en el diccionario
                 resultados[nombre] = {
                     "Precisión": precision,
                     "Matriz de Confusión": matriz_confusion,
                     "Cross-validation scores": cv_scores,
                 }
-            except Exception as e:
+            except Exception as e: #Manejamos cualquier excepción durante el entrenamiento o la evaluación
                 print(f"Error al entrenar o evaluar {nombre}: {e}")
-                resultados[nombre] = {"Error": str(e)}
-        return resultados
+                resultados[nombre] = {"Error": str(e)} #Guardamos el mensaje de error en el diccionario
+        return resultados #Devolvemos el diccionario con los resultados
 
     def comparar_arboles_decision(self):
         """
-        Compara diferentes árboles de decisión con diferentes 
-        profundidades y selecciona el mejor basado en la precisión 
+        Comparamos diferentes árboles de decisión con diferentes
+        profundidades y seleccionamos el mejor basado en la precisión
         en el conjunto de prueba.
-
-        Returns:
-          DecisionTreeClassifier: El mejor árbol de decisión encontrado.
+        Esta función nos regresará el mejor árbol de decisión encontrado.
         """
-        profundidades = range(1, 11)
-        resultados_arboles = []
+        profundidades = range(1, 11) #Creamos una lista de profundidades del 1 al 11
+        resultados_arboles = [] #Creamos una lista para almacenar los resultados
+
+       #Iteramos sobre cada profundidad
         for profundidad in profundidades:
-            arbol = DecisionTreeClassifier(max_depth=profundidad, random_state=42)
+           #Creamos un árbol de decisión con la profundidad actual
+            arbol = DecisionTreeClassifier(max_depth=profundidad, random_state=42) #Semilla aleatoria para reproducibilidad
+
+           #Entrenamos el árbol con los datos de entrenamiento
             arbol.fit(self.X_train, self.y_train)
+
+           #Realizamos predicciones con el árbol usando los datos de prueba
             y_pred = arbol.predict(self.X_test)
+
+           #Calculamos la precisión del árbol y la guardamos en la lista
             precision = accuracy_score(self.y_test, y_pred)
             resultados_arboles.append(precision)
 
-        # Gráfica de comparación
+       #Creamos una gráfica para comparar la precisión de los árboles con diferentes profundidades
         plt.figure(figsize=(10, 6))
-        plt.plot(profundidades, resultados_arboles, marker='o')
-        plt.xlabel("Profundidad del árbol")
-        plt.ylabel("Precisión")
-        plt.title("Comparación de árboles de decisión con diferentes profundidades")
-        plt.grid(True)
-        plt.show()
+        plt.plot(profundidades, resultados_arboles, marker='o') #Creamos un gráfico de línea con marcadores
+        plt.xlabel("Profundidad del árbol") #Etiqueta del eje x
+        plt.ylabel("Precisión") #Etiqueta del eje y
+        plt.title("Comparación de árboles de decisión con diferentes profundidades") #Definimos el título del gráfico
+        plt.grid(True) #Agregamos una cuadrícula al gráfico
+        plt.show() #Mostramos el gráfico
 
-        # Seleccionar el mejor árbol (ejemplo: con mayor precisión)
-        mejor_profundidad = profundidades[resultados_arboles.index(max(resultados_arboles))]
-        mejor_arbol = DecisionTreeClassifier(max_depth=mejor_profundidad, random_state=42)
-        mejor_arbol.fit(self.X_train, self.y_train)
+       #Seleccionamos el mejor árbol de decisión (el que tiene la mayor precisión)
+        mejor_profundidad = profundidades[resultados_arboles.index(max(resultados_arboles))] #Encontramos la profundidad con la mayor precisión
+        mejor_arbol = DecisionTreeClassifier(max_depth=mejor_profundidad, random_state=42) #Creamos un nuevo árbol con la mejor profundidad
+        mejor_arbol.fit(self.X_train, self.y_train) #Entrenamos el mejor árbol
 
-        print(f"Mejor profundidad del árbol: {mejor_profundidad}")
+        print(f"Mejor profundidad del árbol: {mejor_profundidad}") #Imprimimos la mejor profundidad
 
-        # Visualizar el mejor árbol
+       #Visualizamos el mejor árbol de decisión
         plt.figure(figsize=(12, 8))
-        plot_tree(mejor_arbol, feature_names=self.X.columns, class_names=["B", "M"], filled=True)
-        plt.title("Árbol de decisión óptimo")
-        plt.show()
+        plot_tree(mejor_arbol, feature_names=self.X.columns, class_names=["B", "M"], filled=True) #Creamos una visualización del árbol
+        plt.title("Árbol de decisión óptimo") #Definimos el título del gráfico
+        plt.show() #Mostramos el gráfico
 
-        return mejor_arbol
+        return mejor_arbol #Devolvemos el mejor árbol de decisión
 
 
+#Esta es la parte más importante del código, pues ejecuta todo lo que definimos anteriormente dentro de un __main__
 if __name__ == "__main__":
     try:
-        clasificadores = Clasificadores("cancer.xlsx")
+       #Creamos una instancia de la clase Clasificadores
+        clasificadores = Clasificadores()
+
+       #Entrenamos y evaluamos los clasificadores
         resultados = clasificadores.entrenar_y_evaluar()
 
-        # Imprimir los resultados de cada clasificador
-        for nombre, resultado in resultados.items():
-            print(f"\nClasificador: {nombre}")
-            for metrica, valor in resultado.items():
-                print(f"{metrica}: {valor}")
+       #Imprimimos los resultados de cada clasificador
+        for nombre, resultado in resultados.items(): #Iteramos sobre los resultados
+            print(f"\nClasificador: {nombre}") #Imprimimos el nombre del clasificador
+            for metrica, valor in resultado.items(): #Iteramos sobre las métricas
+                print(f"{metrica}: {valor}") #Imprimimos el nombre de la métrica y su valor
 
+       #Comparamos los árboles de decisión y encontramos el mejor
         mejor_arbol = clasificadores.comparar_arboles_decision()
-        print(f"\nMejor árbol de decisión: {mejor_arbol}")
+        print(f"\nMejor árbol de decisión: {mejor_arbol}") #Imprimimos el mejor árbol
 
-    except Exception as e:
-        print(f"Error en el programa principal: {e}")
+    except Exception as e: #Manejamos cualquier excepción en el bloque principal
+        print(f"Error en el programa principal: {e}") #Imprimimos el mensaje de error
